@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173f35">
+  <meta name="description" content="Control de gastos de viajes Puerta a Puerta">
+  <title>Puerta a Puerta | Gastos</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: Arial, sans-serif;
+      background: #f2f5f3; color: #20352e;
+    }
+    header {
+      background: #173f35; color: white;
+      padding: 25px 20px; border-radius: 0 0 22px 22px;
+    }
+    header h1 { margin: 0 0 6px; font-size: 26px; }
+    header p { margin: 0; color: #d1e5dc; }
+    main { max-width: 600px; margin: auto; padding: 18px; }
+    .card {
+      background: white; padding: 18px; margin-bottom: 16px;
+      border-radius: 16px; box-shadow: 0 3px 12px #183b3010;
+    }
+    .total { font-size: 30px; font-weight: bold; margin-top: 8px; }
+    label { display: block; margin: 13px 0 6px; font-weight: bold; }
+    input, select, button {
+      width: 100%; padding: 13px; border-radius: 10px;
+      font-size: 16px;
+    }
+    input, select { border: 1px solid #cbd7d0; background: white; }
+    button {
+      border: 0; background: #1b6b50; color: white;
+      font-weight: bold; margin-top: 14px; cursor: pointer;
+    }
+    button.secondary { background: #e2eee8; color: #173f35; }
+    .expense {
+      padding: 12px 0; border-bottom: 1px solid #e6ece8;
+      display: flex; justify-content: space-between; gap: 12px;
+    }
+    .muted { color: #718078; font-size: 13px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs button { margin: 0; }
+    .hidden { display: none; }
+    .bar { height: 12px; background: #e5ece8; border-radius: 10px; overflow: hidden; }
+    .fill { height: 100%; background: #31936b; }
+    .delete { width: auto; margin: 0; padding: 7px 10px; background: #f8e8e5; color: #9b3327; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🚗 Puerta a Puerta</h1>
+    <p>Organizador de gastos de viajes</p>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <button onclick="showPage('home')">Inicio</button>
+      <button onclick="showPage('add')">+ Gasto</button>
+      <button onclick="showPage('reports')">Informes</button>
+    </div>
+
+    <section id="home">
+      <div class="card">
+        <div>Gastos del mes</div>
+        <div class="total" id="monthlyTotal">$0</div>
+        <div class="muted" id="monthLabel"></div>
+      </div>
+      <div class="card">
+        <h3>Últimos gastos</h3>
+        <div id="latest"></div>
+        <p class="muted" id="empty">Todavía no cargaste gastos.</p>
+      </div>
+      <button onclick="showPage('add')">+ Registrar un gasto</button>
+    </section>
+
+    <section id="add" class="hidden">
+      <div class="card">
+        <h2>Registrar gasto</h2>
+        <form id="expenseForm">
+          <label for="amount">Importe ($)</label>
+          <input id="amount" type="number" min="1" step="0.01" required placeholder="Ej. 15000">
+          <label for="category">Categoría</label>
+          <select id="category" required>
+            <option>Combustible</option>
+            <option>Peajes</option>
+            <option>Comida</option>
+            <option>Alojamiento</option>
+            <option>Mantenimiento</option>
+            <option>Estacionamiento</option>
+            <option>Otros</option>
+          </select>
+          <label for="date">Fecha</label>
+          <input id="date" type="date" required>
+          <label for="note">Nota (opcional)</label>
+          <input id="note" type="text" maxlength="100" placeholder="Ej. Viaje a Tigre">
+          <button type="submit">Guardar gasto</button>
+        </form>
+        <button class="secondary" onclick="showPage('home')">Cancelar</button>
+      </div>
+    </section>
+
+    <section id="reports" class="hidden">
+      <div class="card">
+        <h2>Informes por categoría</h2>
+        <p class="muted">Distribución de todos los gastos registrados.</p>
+        <div id="reportList"></div>
+      </div>
+      <div class="card">
+        <button class="secondary" onclick="exportCSV()">Exportar gastos (CSV)</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const money = n => new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS', maximumFractionDigits: 2
+    }).format(n);
+
+    let expenses = [];
+    try {
+      expenses = JSON.parse(localStorage.getItem('puertaGastos') || '[]');
+    } catch (e) {
+      expenses = [];
+    }
+
+    function save() {
+      localStorage.setItem('puertaGastos', JSON.stringify(expenses));
+      render();
+    }
+
+    function showPage(id) {
+      ['home', 'add', 'reports'].forEach(page => {
+        document.getElementById(page).classList.toggle('hidden', page !== id);
+      });
+      render();
+    }
+
+    function render() {
+      const now = new Date();
+      const month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      const monthly = expenses
+        .filter(e => e.date && e.date.startsWith(month))
+        .reduce((sum, e) => sum + e.amount, 0);
+
+      document.getElementById('monthlyTotal').textContent = money(monthly);
+      document.getElementById('monthLabel').textContent =
+        now.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+
+      const latest = [...expenses].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+      document.getElementById('empty').style.display = latest.length ? 'none' : 'block';
+      document.getElementById('latest').innerHTML = latest.map(e => `
+        <div class="expense">
+          <div><strong>${escapeHTML(e.category)}</strong>
+          <div class="muted">${escapeHTML(e.date)}${e.note ? ' · ' + escapeHTML(e.note) : ''}</div></div>
+          <strong>${money(e.amount)}</strong>
+        </div>`).join('');
+
+      const totals = {};
+      expenses.forEach(e => totals[e.category] = (totals[e.category] || 0) + e.amount);
+      const grandTotal = expenses.reduce((s, e) => s + e.amount, 0);
+      document.getElementById('reportList').innerHTML =
+        Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([cat, total]) => `
+          <p><strong>${escapeHTML(cat)}</strong> — ${money(total)}
+          <span class="muted">(${grandTotal ? Math.round(total / grandTotal * 100) : 0}%)</span></p>
+          <div class="bar"><div class="fill" style="width:${grandTotal ? total / grandTotal * 100 : 0}%"></div></div>
+        `).join('') || '<p class="muted">Todavía no hay gastos para informar.</p>';
+    }
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;',
+        '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    document.getElementById('date').value =
+      new Date().getFullYear() + '-' +
+      String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
+      String(new Date().getDate()).padStart(2, '0');
+
+    document.getElementById('expenseForm').addEventListener('submit', event => {
+      event.preventDefault();
+      const amount = Number(document.getElementById('amount').value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert('Ingresá un importe válido.');
+        return;
+      }
+      expenses.push({
+        id: Date.now(),
+        amount,
+        category: document.getElementById('category').value,
+        date: document.getElementById('date').value,
+        note: document.getElementById('note').value.trim()
+      });
+      save();
+      event.target.reset();
+      document.getElementById('date').value =
+        new Date().getFullYear() + '-' +
+        String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
+        String(new Date().getDate()).padStart(2, '0');
+      showPage('home');
+    });
+
+    function exportCSV() {
+      const rows = [['Fecha', 'Categoría', 'Importe', 'Nota'],
+        ...expenses.map(e => [e.date, e.category, e.amount, e.note])];
+      const csv = rows.map(row => row.map(v =>
+        '"' + String(v).replace(/"/g, '""') + '"'
+      ).join(';')).join('\r\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'gastos-puerta-a-puerta.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+      });
+    }
+    render();
+  </script>
+</body>
+</html>
