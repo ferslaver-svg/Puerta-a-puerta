@@ -1,0 +1,11 @@
+{
+  "name": "Puerta a Puerta",
+  "short_name": "Puerta a Puerta",
+  "description": "Organizador de gastos de viajes",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f5f3",
+  "theme_color": "#173f35",
+  "lang": "es-AR"
+}
